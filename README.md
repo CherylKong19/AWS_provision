@@ -21,5 +21,5 @@ This repository contains all main files to automate AWS provision.
 ### To get information for ec2 and databases
 1. Run command `ansible-playbook --tags info`
 
-### To destory all created instances 
+### To destroy all created instances 
 1. Run command `ansible-playbook --tags destroy`
