@@ -1,0 +1,85 @@
+---
+- name: VPC info
+  amazon.aws.ec2_vpc_net_info:
+    filters:
+      "tag:Name": <vpc_name>
+  register: vpcs
+  when: vpcs is not defined
+
+- name: get subnet info
+  amazon.aws.ec2_vpc_subnet_info:
+    #filter to find matched output
+    filters:
+      "tag:Name": <subnet_name>
+      vpc-id: "{{ vpcs.vpcs[0].id }}" ##register to variable
+  register: aws_subnets
+  when: aws_db_subnet is not defined
+
+- name: get security group app info
+  amazon.aws.ec2_group_info:
+    filters:
+      group-name: "{{AWS_PREFIX}}_SECGRP_APP"
+      vpc-id: "{{ vpcs.vpcs[0].id }}"
+  register: aws_groups_app
+  when: aws_groups_app is not defined
+
+- name: get security group db info
+  amazon.aws.ec2_group_info:
+    filters:
+      group-name: "{{AWS_PREFIX}}_SECGRP_DB"
+      vpc-id: "{{ vpcs.vpcs[0].id }}"
+  register: aws_groups_DB
+  when: aws_groups_db is not defined
+  
+- name: ec2 info
+  amazon.aws.ec2_instance_info:
+    filters:
+      instance-state-name: running
+      "tag:Name": "{{ AWS_PREFIX }}*" 
+  register: ec2_instances
+
+- name: APP info
+  amazon.aws.ec2_instance_info:
+    filters:
+      instance-state-name: running
+      "tag:Name": "{{ AWS_PREFIX }}_APP"
+  register: app_instances
+
+- name: Print APP info 
+  debug:
+    msg: "APP's public IP address: {{ app_instances.instances[0].public_ip_address }}"
+  when: ec2_instances.instances | length > 0
+
+- name: DB info
+  amazon.aws.ec2_instance_info:
+    filters:
+      instance-state-name: running
+      "tag:Name": "{{ AWS_PREFIX }}_DB"
+  when: rds_database == false 
+  register: db_instances
+- name: Print Db info
+  debug:
+    msg: "DB's private IP address:{{ db_instances.instances[0].network_interfaces[0].private_ip_address }}"
+  when: rds_database == false
+- name: DB set fact
+  set_fact:
+    application_address: "{{ app_instances.instances[0].public_ip_address }}"
+    database_address: "{{ db_instances.instances[0].network_interfaces[0].private_ip_address }}"
+  when: rds_database == false
+  # register: db_instances
+
+- name: RDS info
+  community.aws.rds_instance_info:
+    db_instance_identifier: "{{ AWS_PREFIX }}-db"
+  register: rds_instances
+  when: rds_database == true
+- name: Print RDS info
+  debug:
+    msg: "RDS's endpoint address:{{ rds_instances.instances[0].endpoint.address  }}"
+  when: rds_database == true
+- name: RDS set fact
+  set_fact:
+    application_address: "{{ app_instances.instances[0].public_ip_address }}"
+    database_address: "{{ rds_instances.instances[0].endpoint.address  }}"
+  when: rds_database == true
+  # register: db_instances

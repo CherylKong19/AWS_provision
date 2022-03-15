@@ -1,0 +1,26 @@
+---
+# tasks file for aws
+- name: Create infra
+  import_tasks: vpc.yml
+  tags: provision
+- name: Create RDS
+  include_tasks: rds.yml
+  when: rds_database == true
+  tags: provision
+- name: Get info about RDS
+  include_tasks: rds.yml
+  when: rds_database == true
+  tags: [provision, info]
+- name: Create EC2 infra
+  include_tasks: ec2.yml
+  tags: provision
+- name: Get info
+  import_tasks: info.yml
+  tags: [provision, info]
+- name: Refresh refresh_inventory
+  meta: refresh_inventory
+  tags: [provision, destroy]
+- name: pause for 30 seconds
+  wait_for_connection:
+    timeout: 600
+  tags: provision

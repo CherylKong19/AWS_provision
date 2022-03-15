@@ -1,0 +1,55 @@
+---
+- hosts: localhost
+  gather_facts: yes
+  vars:
+    - AWS_PREFIX: <name>
+    - rds_database: false 
+    - vpc_cidr: 10.100.0.0/16
+    - subnet_cidr: 10.100.10.0/24
+    - subnet_b_cidr: 10.100.20.0/24
+    - db_name: <db_name>
+    - db_username: <db_username>
+    - db_password: <db_userpassword>
+  tasks:
+    - include_role: 
+        name: aws
+      tags: provision
+    
+- hosts: service_DB
+  gather_facts: no
+  vars:
+    db_name: <db_name>
+    db_username: <db_username>
+    db_password: <db_userpassword>
+  tasks:
+    - import_role: 
+        name: database
+      tags: provision
+
+- hosts: service_APP
+  vars:
+    db_host: "{{ hostvars.localhost.database_address }}"
+    db_name: <db_name>
+    db_username: <db_username>
+    db_password: <db_userpassword>
+    student_name: <student_name>
+    student_id: <student_id>
+  tasks:
+    - import_role: 
+        name: application
+      tags: provision
+      
+- hosts: localhost
+  gather_facts: no
+  vars:
+    AWS_PREFIX: demo
+    rds_database: false
+  tasks:
+    - import_role: 
+        name: aws
+        tasks_from: info.yml
+      tags: [always,info]
+    - import_role: 
+        name: aws
+        tasks_from: destroy.yml
+      tags: destroy

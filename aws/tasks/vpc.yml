@@ -1,0 +1,82 @@
+---
+- name: Create the AWS VPC
+  amazon.aws.ec2_vpc_net:
+    name: <vps_name>
+    cidr_block: 10.100.0.0/16
+    region: <aws_region>
+  register: aws_vpc_info
+
+- name: Make sure a subnet exists (subnet A)
+  amazon.aws.ec2_vpc_subnet:
+    cidr: "{{ subnet_cidr }}"
+    az: <aws_zone>
+    vpc_id: "{{ aws_vpc_info.vpc.id }}" #extract variable
+    tags:
+      Name: "{{ AWS_PREFIX }}_SUBNET"
+  register: aws_subnet_info
+
+- name: Make sure a subnet exists (subnet B)
+  amazon.aws.ec2_vpc_subnet:
+    cidr: "{{ subnet_b_cidr }}"
+    az: <aws_zone>
+    vpc_id: "{{ aws_vpc_info.vpc.id }}" #extract variable
+    tags:
+      Name: "{{ AWS_PREFIX }}_SUBNETB"
+  register: aws_subnet_info2
+
+- name: Internet gateway
+  ec2_vpc_igw:
+    vpc_id: "{{ aws_vpc_info.vpc.id }}"
+    tags:
+      Name: <gateway_name>
+  register: aws_igw_info
+
+- name: Route table
+  amazon.aws.ec2_vpc_route_table:
+    subnets:
+      - "{{ aws_subnet_info.subnet.id }}"
+    routes:
+      - dest: 0.0.0.0/0
+        gateway_id: "{{ aws_igw_info.gateway_id }}"
+    vpc_id: "{{ aws_vpc_info.vpc.id }}"
+    tags:
+      Name: <routtable_name>
+
+- name: Security group for app
+  amazon.aws.ec2_group:
+    name: "{{AWS_PREFIX}}_SECGRP_APP"
+    description: Security group for app - SSH and HTTP wide open
+    vpc_id: "{{ aws_vpc_info.vpc.id }}"
+    rules:
+      - proto: tcp
+        ports:
+          - 22
+          - 80
+        cidr_ip: 0.0.0.0/0
+  register: aws_groups_app
+
+- name: Security group for DB
+  amazon.aws.ec2_group:
+    name: "{{AWS_PREFIX}}_SECGRP_DB"
+    description: Security group for db - SSH and MYSQL wide open
+    vpc_id: "{{ aws_vpc_info.vpc.id }}"
+    rules:
+      - proto: tcp
+        ports:
+          - 22
+        cidr_ip: 0.0.0.0/0
+      - proto: tcp
+        ports:
+          - 3306
+        cidr_ip: "{{ subnet_cidr }}"
+  register: aws_groups_db  
+
+- name: DB subnet group
+  community.aws.rds_subnet_group:
+    state: present
+    name: <subnet_name>
+    description: DB subnet group
+    subnets:
+      -  "{{ aws_subnet_info.subnet.id }}"
+      -  "{{ aws_subnet_info2.subnet.id }}"
+  register: aws_db_subnet

@@ -1,0 +1,151 @@
+---
+- name: apt update
+  become: true
+  apt:
+    update_cache: yes
+- name: install software
+  become: true
+  apt:
+    name: 
+      - nginx
+      - unzip
+      - acl
+      - python3-pip
+      - libmysqlclient-dev
+      - mysql-client-core-8.0
+- name: adding backend user
+  become: true
+  user:
+    name: backend
+    home: /backend
+- name: download the code
+  get_url:
+    url: https://github.com/timoguic/acit4640-py-mysql/archive/refs/heads/master.zip
+    dest: /tmp/source.zip
+- name: create tmp directory for source code
+  file:
+    path: /tmp/code
+    state: directory
+- name: unzip the code archieve
+  unarchive:
+    src: /tmp/source.zip
+    dest: /tmp/code
+    remote_src: yes
+- name: create a directory for frontend files
+  become: true
+  file:
+    path: /frontend
+    state: directory
+    owner: "{{ ansible_ssh_user }}"
+- name: set up frontend files
+  copy:
+    src: /tmp/code/acit4640-py-mysql-master/frontend/index.html
+    dest: /frontend/index.html
+    remote_src: yes
+- name: copy nginx.conf to instance
+  become: true
+  copy:
+    src: files/nginx-default
+    dest: /etc/nginx/sites-available/default
+- name: restart nginx after making changes
+  become: true
+  systemd:
+    name: nginx 
+    state: restarted
+- name: create a directory for backend files
+  become: true
+  file:
+    path: /frontend
+    state: directory
+    owner: backend
+- name: set up backend files
+  become: true
+  copy:
+    src: /tmp/code/acit4640-py-mysql-master/backend/
+    dest: /backend/src
+    remote_src: yes
+- name: change owner of backend
+  become: true
+  file:
+    path: /backend/src
+    owner: backend
+    group: backend
+    recurse: true
+- name: pip install requriements
+  become: true
+  become_user: backend
+  pip:
+    requirements: /backend/src/requirements.txt
+    extra_args: --user
+    executable: pip3
+- name: pip install requriements
+  become: true
+  pip:
+    name:
+      - mysqlclient
+      - pymysql
+    executable: pip3
+- name: copy backend.service to instance
+  become: true
+  copy:
+    src: files/backend.service
+    dest: /etc/systemd/system/backend.service    
+- name: enable backend.service
+  become: true
+  systemd:
+    daemon_reload: true
+    name: backend
+    enabled: true
+    state: restarted
+# - name: adjust backend settings
+#   become: true
+#   become_user: backend
+#   replace:
+#     path: /backend/src/backend.conf
+#     regexp: 'MYSQL_HOST[ \t]*= 127.0.0.1'
+    # replace: "MYSQL_HOST = {{hostvars.localhost.db_instances.instances[0].private_ip_address}}"
+  # when: rds_database == false
+- name: adjast backend settings
+  become: true
+  become_user: backend
+  template:
+    src: files/backend.conf.j2
+    dest: /backend/src/backend.conf
+  # when: rds_database == true
+- name: start backend
+  become: true
+  systemd:
+    name: backend
+    state: restarted
+    daemon_reload: yes
+- debug:
+    msg: "{{ db_host }}"
+- name: create a table
+  mysql_query:
+    login_host: "{{ db_host }}"
+    login_user: "{{ db_username }}"
+    login_password: "{{ db_password }}"
+    login_db: "{{ db_name }}"
+    query:
+        - CREATE TABLE IF NOT EXISTS item (name varchar(30) NOT NULL, bcit_id varchar(10) NOT NULL, PRIMARY KEY (bcit_id))
+- name: Check if table has a record
+  mysql_query:
+    login_host: "{{ db_host }}"
+    login_user: "{{ db_username }}"
+    login_password: "{{ db_password }}"
+    login_db: "{{ db_name }}"
+    query: SELECT bcit_id from item where bcit_id = %s
+    positional_args:
+      - "{{ student_id }}"
+  register: mysql_query_data
+- name: insert into table withe exmaple user
+  mysql_query:
+    login_host: "{{ db_host }}"
+    login_user: "{{ db_username }}"
+    login_password: "{{ db_password }}"
+    login_db: "{{ db_name }}"
+    query: INSERT INTO item (bcit_id, name) VALUES (%s, %s)
+    positional_args:
+      - "{{ student_id }}"
+      - "{{ student_name }}"
+  when: mysql_query_data.rowcount[0] == 0

@@ -1,0 +1,20 @@
+- name: provision RDS instance
+  community.aws.rds_instance:
+    db_instance_identifier: "{{ AWS_PREFIX }}-db"
+    vpc_security_group_ids: [ "{{aws_groups_db.group_id }}" ]
+    availability_zone: <aws_zone>
+    engine: mariadb
+    instance_type: db.t2.micro
+    allocated_storage: 8
+    db_subnet_group_name: <subnet_name>
+    db_name: "{{ db_name }}"
+    username: "{{ db_username }}"
+    password: "{{ db_password }}"
+    tags:
+      Course: "{{ AWS_PREFIX }}"
+  tags: provision
+- name: get info about RDS instance
+  community.aws.rds_instance_info:
+    db_instance_identifier: "{{ AWS_PREFIX }}-db"
+  register: aws_rds_info
+  tags: [provision, info]

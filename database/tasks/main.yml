@@ -1,0 +1,75 @@
+---
+# tasks file for database
+- name: apt update
+  become: true
+  apt:
+    update_cache: yes
+- name: install pip dependencies
+  become: true
+  apt:
+    name: 
+      - python3-dev
+      - python3-wheel
+- name: install pip
+  become: true
+  apt:
+    name: 
+      - python3-pip
+- name: install mysqlserver
+  become: true
+  apt:
+    name: 
+      - mysql-server
+- name: pip install requriements
+  become: true
+  pip:
+    name:
+      pymysql
+    executable: pip3
+- name: start up the mysql service
+  become: true
+  systemd:
+    name: mysql 
+    state: started
+    enabled: true
+- name: Create a new database with dynamic input
+  become: true
+  mysql_db:
+    login_unix_socket: /var/run/mysqld/mysqld.sock
+    login_user: root
+    name: "{{ db_name }}"
+- name: Create example user with priveleges to backend database
+  become: true
+  mysql_user:
+    login_unix_socket: /var/run/mysqld/mysqld.sock
+    login_user: root
+    name: "{{ db_username }}"
+    password: "{{ db_password }}"
+    host: '%'
+    priv: 
+      "{{ db_name }}.*:ALL,GRANT"
+- name: Reload privilege tables
+  become: true
+  mysql_query:
+    login_unix_socket: /var/run/mysqld/mysqld.sock
+    login_user: root
+    query: FLUSH PRIVILEGES
+- name: mysql host
+  become: true
+  replace:
+    path: /etc/mysql/mysql.conf.d/mysqld.cnf
+    regexp: '^bind-address[ \t]*= 127.0.0.1'
+    replace: "bind-address = 0.0.0.0"
+- name: restart mysql
+  become: true
+  service:
+    name: mysql
+    enabled: true
+    state: restarted          
+- name: create table
+  mysql_query:
+    login_unix_socket: /var/run/mysqld/mysqld.sock
+    login_user: "{{ db_username }}"
+    login_password: "{{ db_password }}"
+    login_db: "{{ db_name }}"
+    query: CREATE TABLE IF NOT EXISTS item (name varchar(30), bcit_id varchar(10) PRIMARY KEY)
